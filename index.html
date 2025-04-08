@@ -2,114 +2,696 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minecraft Texture Hue Editor</title>
-  <style>
-    body {
-      background: #141414;
-      color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      padding: 2rem;
-      display: flex;
-      justify-content: center;
-    }
-    .panel {
-      max-width: 800px;
-      width: 100%;
-      background: #1e1e1e;
-      padding: 2rem;
-      border-radius: 1rem;
-      box-shadow: 0 0 20px rgba(0,0,0,0.4);
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 2rem;
-      color: #f00;
-    }
-    label {
-      display: block;
-      margin-top: 1.5rem;
-      font-weight: bold;
-    }
-    input[type="range"], select {
-      width: 100%;
-      margin-top: 0.5rem;
-    }
-    .checkboxes, .buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-    .checkboxes label {
-      background: #2a2a2a;
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-    }
-    button {
-      background: #c00;
-      color: #fff;
-      border: none;
-      padding: 0.75rem 2rem;
-      font-weight: bold;
-      cursor: pointer;
-      border-radius: 0.5rem;
-    }
-    button:hover {
-      background: #f00;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Minecraft Texture Recolor</title>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-  <div class="panel">
-    <h1>Minecraft Texture Hue Editor</h1>
-
-    <label for="hue">Hue</label>
-    <input type="range" id="hue" min="0" max="360" value="180" />
-
-    <label for="saturation">Saturation</label>
-    <input type="range" id="saturation" min="0" max="200" value="100" />
-
-    <label for="contrast">Contrast</label>
-    <input type="range" id="contrast" min="0" max="200" value="100" />
-
-    <label for="mode">Coloring Mode</label>
-    <select id="mode">
-      <option value="relative">Relative</option>
-      <option value="absolute">Absolute</option>
-    </select>
-
-    <div class="checkboxes">
-      <label><input type="checkbox" id="tools" checked /> Tools</label>
-      <label><input type="checkbox" id="armor" checked /> Armor</label>
-      <label><input type="checkbox" id="food" checked /> Food</label>
-      <label><input type="checkbox" id="blocks" /> Blocks</label>
+  <div class="page-wrapper">
+    <div class="sidebar">
+      <div class="logo-container">
+        <div class="logo">
+          <i class="fas fa-cube"></i>
+        </div>
+        <h2>TEXTURA</h2>
+      </div>
+      <div class="nav-links">
+        <a href="#" class="active"><i class="fas fa-palette"></i> Recolor</a>
+        <a href="#"><i class="fas fa-layer-group"></i> Textures</a>
+        <a href="#"><i class="fas fa-paint-brush"></i> Designs</a>
+        <a href="#"><i class="fas fa-cog"></i> Settings</a>
+      </div>
     </div>
+    
+    <div class="main-content">
+      <header>
+        <h1>TEXTURE <span>RECOLOR STUDIO</span></h1>
+        <div class="header-accent"></div>
+      </header>
+      
+      <div class="container">
+        <div class="tool-panel">
+          <form id="textureForm">
+            <div class="form-group">
+              <label for="packInput">SELECT RESOURCE PACK</label>
+              <div class="custom-file-input">
+                <input type="file" id="packInput" accept=".zip" required />
+                <div class="file-input-label">
+                  <i class="fas fa-upload"></i>
+                  <span>CHOOSE FILE</span>
+                </div>
+              </div>
+            </div>
 
-    <div class="buttons">
-      <input type="file" id="packInput" accept=".zip" />
-      <button onclick="processPack()">Generate Pack</button>
+            <div class="form-group">
+              <label for="huePicker">TARGET HUE</label>
+              <div class="color-picker-container">
+                <input type="color" id="huePicker" value="#ff00ff" />
+                <span class="color-indicator"></span>
+              </div>
+            </div>
+
+            <button type="submit" class="action-button">
+              <span class="button-text">TRANSFORM</span>
+              <i class="fas fa-arrow-right"></i>
+            </button>
+          </form>
+
+          <div class="progress-section">
+            <div class="status-container">
+              <div id="status">STATUS: READY</div>
+              <progress id="progressBar" value="0" max="100"></progress>
+            </div>
+            <a id="downloadLink" download="ModifiedPack.zip">
+              <i class="fas fa-download"></i>
+              <span>DOWNLOAD MODIFIED PACK</span>
+            </a>
+          </div>
+        </div>
+        
+        <div class="preview-section">
+          <div class="section-header">
+            <h3>TEXTURE PREVIEW</h3>
+            <div class="section-line"></div>
+          </div>
+          <div id="previewGrid"></div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
-    function processPack() {
-      const hue = document.getElementById('hue').value;
-      const saturation = document.getElementById('saturation').value;
-      const contrast = document.getElementById('contrast').value;
-      const mode = document.getElementById('mode').value;
-      const tools = document.getElementById('tools').checked;
-      const armor = document.getElementById('armor').checked;
-      const food = document.getElementById('food').checked;
-      const blocks = document.getElementById('blocks').checked;
-      const zipInput = document.getElementById('packInput').files[0];
+    const form = document.getElementById("textureForm");
+    const status = document.getElementById("status");
+    const previewGrid = document.getElementById("previewGrid");
+    const progressBar = document.getElementById("progressBar");
+    const downloadLink = document.getElementById("downloadLink");
 
-      if (!zipInput) return alert('Please upload a texture pack zip file');
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
 
-      // Placeholder: zip processing & recoloring logic should go here
-      alert(`Processing zip with hue=${hue}, saturation=${saturation}, contrast=${contrast}, mode=${mode}\nGroups: tools=${tools}, armor=${armor}, food=${food}, blocks=${blocks}`);
+      if (max === min) {
+        h = s = 0;
+      } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+      }
+
+      return [h * 360, s, l];
     }
+
+    function hslToRgb(h, s, l) {
+      h /= 360;
+      let r, g, b;
+
+      if (s === 0) {
+        r = g = b = l;
+      } else {
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1 / 6) return p + (q - p) * 6 * t;
+          if (t < 1 / 2) return q;
+          if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+          return p;
+        };
+
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+      }
+
+      return [r * 255, g * 255, b * 255];
+    }
+
+    async function shiftHue(blob, targetHue) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const alpha = data[i + 3];
+            if (alpha < 10) continue;
+            const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+            const [r, g, b] = hslToRgb(targetHue, s, l);
+            data[i] = r;
+            data[i + 1] = g;
+            data[i + 2] = b;
+          }
+
+          ctx.putImageData(imageData, 0, 0);
+          canvas.toBlob(resolve, 'image/png');
+        };
+      });
+    }
+
+    async function isBlockItem(path, zip) {
+      const modelPath = path.replace("textures/item/", "models/item/").replace(".png", ".json");
+      try {
+        const modelFile = await zip.file(modelPath)?.async("string");
+        if (!modelFile) return false;
+        const model = JSON.parse(modelFile);
+        return model.parent?.includes("block") || false;
+      } catch {
+        return false;
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const file = document.getElementById("packInput").files[0];
+      const hueHex = document.getElementById("huePicker").value;
+      const r = parseInt(hueHex.slice(1, 3), 16);
+      const g = parseInt(hueHex.slice(3, 5), 16);
+      const b = parseInt(hueHex.slice(5, 7), 16);
+      const [h] = rgbToHsl(r, g, b);
+
+      if (!file) return;
+
+      status.textContent = "Reading pack...";
+      previewGrid.innerHTML = "";
+      progressBar.value = 0;
+      downloadLink.style.display = "none";
+
+      const zip = await JSZip.loadAsync(file);
+      const newZip = new JSZip();
+      const texturePaths = [];
+
+      for (const relativePath in zip.files) {
+        const file = zip.files[relativePath];
+        const isTexture = relativePath.includes("textures/item/") && relativePath.endsWith(".png");
+        const isGui = relativePath.includes("textures/gui") || relativePath.includes("atlas") || relativePath.includes("container");
+
+        if (isTexture && !isGui && !(await isBlockItem(relativePath, zip))) {
+          texturePaths.push(relativePath);
+        } else if (!relativePath.endsWith(".png")) {
+          newZip.file(relativePath, file.async("arraybuffer"));
+        } else {  
+          zip.file(relativePath).async("arraybuffer").then(data => {
+            newZip.file(relativePath, data);
+          });
+        }
+      }
+
+      let completed = 0;
+      for (const path of texturePaths) {
+        const imgData = await zip.file(path).async("blob");
+        const modifiedBlob = await shiftHue(imgData, h);
+
+        const imgURL = URL.createObjectURL(modifiedBlob);
+        const img = document.createElement("img");
+        img.src = imgURL;
+        img.alt = path.split("/").pop();
+        img.title = path;
+        img.classList.add("preview-image");
+        previewGrid.appendChild(img);
+
+        newZip.file(path, modifiedBlob);
+
+        completed++;
+        progressBar.value = (completed / texturePaths.length) * 100;
+        status.textContent = `PROCESSING: ${completed} OF ${texturePaths.length}`;
+        await new Promise(r => setTimeout(r, 20));
+      }
+
+      const resultBlob = await newZip.generateAsync({ type: "blob" });
+      downloadLink.href = URL.createObjectURL(resultBlob);
+      downloadLink.style.display = "flex";
+      status.textContent = "COMPLETE! READY FOR DOWNLOAD.";
+    });
+
+    document.querySelector('.file-input-label').addEventListener('click', () => {
+      document.getElementById('packInput').click();
+    });
+
+    document.getElementById('packInput').addEventListener('change', function() {
+      const fileName = this.files[0]?.name || 'No file selected';
+      document.querySelector('.file-input-label span').textContent = fileName;
+    });
+
+    document.getElementById('huePicker').addEventListener('input', function() {
+      document.querySelector('.color-indicator').style.backgroundColor = this.value;
+    });
+    
+    // Initialize color indicator
+    document.querySelector('.color-indicator').style.backgroundColor = document.getElementById('huePicker').value;
   </script>
+
+  <style>
+    /* Global Styles */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: #111111;
+      color: #ffffff;
+      height: 100vh;
+      overflow: hidden;
+      line-height: 1.6;
+    }
+
+    .page-wrapper {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Sidebar Styles */
+    .sidebar {
+      width: 250px;
+      background: #0a0a0a;
+      height: 100%;
+      padding: 30px 0;
+      box-shadow: 5px 0 15px rgba(0, 0, 0, 0.2);
+      position: relative;
+      z-index: 10;
+    }
+
+    .logo-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+
+    .logo {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #ff0000, #770000);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+
+    .logo i {
+      font-size: 30px;
+      color: #ffffff;
+    }
+
+    .sidebar h2 {
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: 2px;
+    }
+
+    .nav-links {
+      margin-top: 30px;
+    }
+
+    .nav-links a {
+      display: flex;
+      align-items: center;
+      padding: 15px 30px;
+      color: #aaaaaa;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      letter-spacing: 1px;
+    }
+
+    .nav-links a.active {
+      background: rgba(255, 0, 0, 0.1);
+      color: #ffffff;
+      border-left: 3px solid #ff0000;
+    }
+
+    .nav-links a:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #ffffff;
+    }
+
+    .nav-links i {
+      margin-right: 15px;
+      font-size: 16px;
+    }
+
+    /* Main Content Styles */
+    .main-content {
+      flex: 1;
+      padding: 0;
+      overflow-y: auto;
+      position: relative;
+      background: linear-gradient(135deg, #111111 0%, #1a1a1a 100%);
+    }
+
+    header {
+      padding: 30px 50px;
+      position: relative;
+    }
+
+    header h1 {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 4px;
+      margin-bottom: 10px;
+    }
+
+    header h1 span {
+      font-weight: 700;
+      color: #ff0000;
+    }
+
+    .header-accent {
+      width: 80px;
+      height: 3px;
+      background: linear-gradient(90deg, #ff0000, #ff0000 70%, transparent);
+    }
+
+    .container {
+      padding: 0 50px 50px;
+    }
+
+    /* Tool Panel */
+    .tool-panel {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 30px;
+      border-radius: 15px;
+      margin-bottom: 40px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .form-group {
+      margin-bottom: 25px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 10px;
+      color: #aaaaaa;
+      font-size: 12px;
+      letter-spacing: 2px;
+      font-weight: 600;
+    }
+
+    .custom-file-input {
+      position: relative;
+    }
+
+    .custom-file-input input[type="file"] {
+      position: absolute;
+      width: 0.1px;
+      height: 0.1px;
+      opacity: 0;
+      overflow: hidden;
+      z-index: -1;
+    }
+
+    .file-input-label {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .file-input-label:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .file-input-label i {
+      margin-right: 15px;
+      font-size: 18px;
+      color: #ff0000;
+    }
+
+    .color-picker-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: none;
+      cursor: pointer;
+    }
+
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+    }
+
+    .color-indicator {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      margin-left: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background-color: #ff00ff;
+    }
+
+    .action-button {
+      background: linear-gradient(135deg, #ff0000, #990000);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 15px 25px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 5px 15px rgba(255, 0, 0, 0.2);
+      width: 100%;
+    }
+
+    .action-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 0, 0, 0.3);
+    }
+
+    .button-text {
+      margin-right: 15px;
+    }
+
+    /* Progress Section */
+    .progress-section {
+      margin-top: 30px;
+    }
+
+    .status-container {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 20px;
+    }
+
+    #status {
+      color: #aaaaaa;
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    progress {
+      width: 100%;
+      height: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    progress::-webkit-progress-bar {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    progress::-webkit-progress-value {
+      background: linear-gradient(90deg, #ff0000, #ff3333);
+      transition: width 0.3s ease;
+    }
+
+    #downloadLink {
+      display: none;
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.3s ease;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #downloadLink:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    #downloadLink i {
+      margin-right: 10px;
+      color: #ff0000;
+    }
+
+    /* Preview Section */
+    .preview-section {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 30px;
+      border-radius: 15px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 25px;
+    }
+
+    .section-header h3 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-right: 15px;
+      white-space: nowrap;
+    }
+
+    .section-line {
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255, 0, 0, 0.5), transparent);
+      flex-grow: 1;
+    }
+
+    #previewGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+      gap: 15px;
+      max-height: 350px;
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    #previewGrid::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    #previewGrid::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+    }
+
+    #previewGrid::-webkit-scrollbar-thumb {
+      background: rgba(255, 0, 0, 0.5);
+      border-radius: 10px;
+    }
+
+    .preview-image {
+      width: 70px;
+      height: 70px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      image-rendering: pixelated;
+      transition: all 0.3s ease;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .preview-image:hover {
+      transform: scale(1.05);
+      border-color: rgba(255, 0, 0, 0.5);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Media Queries */
+    @media (max-width: 1024px) {
+      .sidebar {
+        width: 200px;
+      }
+      
+      .container {
+        padding: 0 30px 30px;
+      }
+      
+      header {
+        padding: 20px 30px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .page-wrapper {
+        flex-direction: column;
+      }
+      
+      .sidebar {
+        width: 100%;
+        height: auto;
+        padding: 15px 0;
+      }
+      
+      .logo-container {
+        margin-bottom: 20px;
+      }
+      
+      .nav-links {
+        display: flex;
+        margin-top: 0;
+      }
+      
+      .nav-links a {
+        flex: 1;
+        padding: 10px;
+        justify-content: center;
+      }
+      
+      .nav-links a i {
+        margin-right: 0;
+      }
+      
+      .nav-links a span {
+        display: none;
+      }
+      
+      .main-content {
+        height: calc(100vh - 120px);
+      }
+      
+      header h1 {
+        font-size: 20px;
+      }
+    }
+  </style>
 </body>
 </html>
