@@ -246,6 +246,23 @@
       </div>
     </div>
   </div>
+    
+    <div class="tab-container">
+  <div class="tab-buttons">
+    <button class="tab-button active" data-tab="tab1">Tab 1</button>
+    <button class="tab-button" data-tab="tab2">Tab 2</button>
+    <button class="tab-button" data-tab="tab3">Tab 3</button>
+  </div>
+  <div class="tab-content active" id="tab1">
+    <p>Content for Tab 1</p>
+  </div>
+  <div class="tab-content" id="tab2">
+    <p>Content for Tab 2</p>
+  </div>
+  <div class="tab-content" id="tab3">
+    <p>Content for Tab 3</p>
+  </div>
+</div>
 
   <script>
     // Tab Navigation
@@ -685,6 +702,26 @@
     });
   </script>
 
+
+<script>
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const target = button.getAttribute('data-tab');
+
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(content => content.classList.remove('active'));
+
+      button.classList.add('active');
+      document.getElementById(target).classList.add('active');
+    });
+  });
+</script>
+
+ 
+
   <style>
     * {
   margin: 0;
@@ -754,6 +791,45 @@ body {
   overflow-y: auto;
   background: #111111;
   padding: 30px;
+}
+
+.tab-container {
+  margin-top: 20px;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tab-button {
+  padding: 8px 16px;
+  background-color: #222;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.3s ease;
+}
+
+.tab-button:hover {
+  background-color: #333;
+}
+
+.tab-button.active {
+  background-color: #444;
+}
+
+.tab-content {
+  display: none;
+  background: #111;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.tab-content.active {
+  display: block;
 }
 
   </style>
