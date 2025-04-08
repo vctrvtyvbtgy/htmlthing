@@ -1,364 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Minecraft Texture Recolor</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js"></script>
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
-      background: #0b0b0c;
-      color: #f4f4f4;
-      display: flex;
-      justify-content: center;
-      align-items: start;
-      height: 100vh;
-      padding: 2rem;
-    }
-
-    .container {
-      background: #111;
-      padding: 2rem;
-      border-radius: 20px;
-      box-shadow: 0 0 60px rgba(255, 255, 255, 0.07);
-      max-width: 700px;
-      width: 100%;
-    }
-
-    h1 {
-      text-align: center;
-      font-weight: 600;
-      font-size: 2rem;
-      margin-bottom: 2rem;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-    }
-
-    label {
-      display: block;
-      margin: 1.2rem 0 0.4rem;
-      color: #bbb;
-      font-weight: 500;
-    }
-
-    input[type="file"],
-    input[type="color"],
-    select,
-    button {
-      width: 100%;
-      padding: 0.75rem;
-      border-radius: 14px;
-      border: none;
-      margin-bottom: 1rem;
-      background: #1a1a1a;
-      color: white;
-    }
-
-    input[type="checkbox"] {
-      margin-right: 0.5rem;
-      transform: scale(1.2);
-      accent-color: #e50914;
-    }
-
-    .checkbox-group label {
-      display: flex;
-      align-items: center;
-      margin-bottom: 0.5rem;
-      cursor: pointer;
-    }
-
-    button {
-      background-color: #e50914;
-      color: white;
-      font-weight: bold;
-      transition: background-color 0.3s ease;
-    }
-
-    button:hover {
-      background-color: #b20710;
-    }
-
-    #previewContainer {
-      margin-top: 2rem;
-    }
-
-    #previewGrid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-      gap: 10px;
-      margin-top: 1rem;
-    }
-
-    .preview-image {
-      width: 64px;
-      height: 64px;
-      border: 2px solid #444;
-      border-radius: 10px;
-      image-rendering: pixelated;
-      position: relative;
-    }
-
-    .preview-image:hover {
-      outline: 2px solid #e50914;
-      cursor: pointer;
-    }
-
-    .remove-toggle {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      background: #1a1a1a;
-      color: #e50914;
-      border: 1px solid #e50914;
-      border-radius: 50%;
-      font-size: 0.8rem;
-      padding: 1px 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .remove-toggle:hover {
-      background: #e50914;
-      color: white;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Texture Recolorer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        header {
+            background-color: #1f2937;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            width: 80%;
+            margin: 30px auto;
+        }
+        .upload-section, .controls-section, .preview-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .slider-label {
+            margin-top: 10px;
+        }
+        .texture-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .texture-item {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+        .controls-section input[type="range"] {
+            width: 100%;
+        }
+        .checkbox-group label {
+            margin-right: 10px;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Texture Modifier</h1>
-    <form id="textureForm">
-      <label for="packInput">Resource Pack (.zip):</label>
-      <input type="file" id="packInput" accept=".zip" required />
 
-      <label for="huePicker">Primary Color:</label>
-      <input type="color" id="huePicker" value="#ff00ff" />
+<header>
+    <h1>Minecraft Resource Pack Recolor Tool</h1>
+    <p>Recolor your Minecraft textures with ease using hue, saturation, and brightness adjustments.</p>
+</header>
 
-      <label for="secondaryColor">Secondary Color (for gradient):</label>
-      <input type="color" id="secondaryColor" value="#00ffff" />
-
-      <label for="colorMode">Color Mode:</label>
-      <select id="colorMode">
-        <option value="hue">Hue Shift</option>
-        <option value="tint">Tint</option>
-        <option value="gradient">Gradient Map</option>
-      </select>
-
-      <div class="checkbox-group">
-        <label><input type="checkbox" id="includeBlocks" checked /> Include Blocks</label>
-        <label><input type="checkbox" id="includeItems" checked /> Include Items/Tools</label>
-        <label><input type="checkbox" id="includeGui" /> Include GUI Textures</label>
-      </div>
-
-      <button type="submit">Apply</button>
-    </form>
-
-    <div id="status">Status: Waiting...</div>
-    <progress id="progressBar" value="0" max="100" style="width: 100%; margin-top: 10px;"></progress>
-    <a id="downloadLink" style="display:none; margin-top: 1rem;" download="ModifiedPack.zip">Download</a>
-
-    <div id="previewContainer">
-      <h3>Preview</h3>
-      <div id="previewGrid"></div>
+<div class="container">
+    <div class="upload-section">
+        <h2>Upload Resource Pack</h2>
+        <input type="file" id="file-upload" accept=".zip">
     </div>
-  </div>
 
-  <script>
-document.getElementById("textureForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
+    <div class="controls-section">
+        <h2>Adjustments</h2>
+        <div>
+            <label for="hue">Hue</label>
+            <input type="range" id="hue" min="-180" max="180" value="0">
+        </div>
+        <div>
+            <label for="saturation">Saturation</label>
+            <input type="range" id="saturation" min="0" max="200" value="100">
+        </div>
+        <div>
+            <label for="brightness">Brightness</label>
+            <input type="range" id="brightness" min="0" max="200" value="100">
+        </div>
 
-  const packFile = document.getElementById("packInput").files[0];
-  if (!packFile) return;
-  
-  // Get the primary color (the only color used now) for hue shifting.
-  const primaryHex = document.getElementById("huePicker").value;
-  
-  // For hue shift, extract the hue from the primary color.
-  // (Note: if primaryHex is white, our algorithm will do a special grayscale conversion.)
-  const [targetHue] = rgbToHsl(...hexToRgb(primaryHex));
-  
-  // Load the resource pack ZIP.
-  const zip = await JSZip.loadAsync(packFile);
-  const newZip = new JSZip();
-  const filePaths = Object.keys(zip.files);
-  const previewGrid = document.getElementById("previewGrid");
-  previewGrid.innerHTML = "";
-  let processedCount = 0;
-  
-  for (const path of filePaths) {
-    const file = zip.files[path];
-    
-    // Exclude mob textures (typically under "textures/entity/")
-    if (path.includes("textures/entity/")) continue;
-    
-    // Non-PNG files are added unmodified.
-    if (!path.endsWith(".png")) {
-      newZip.file(path, await file.async("arraybuffer"));
-      continue;
+        <div class="checkbox-group">
+            <label><input type="checkbox" id="food" checked> Food</label>
+            <label><input type="checkbox" id="tools" checked> Tools</label>
+            <label><input type="checkbox" id="gui" checked> GUI</label>
+            <label><input type="checkbox" id="mobs" checked> Mobs</label>
+        </div>
+    </div>
+
+    <div class="preview-section">
+        <h2>Preview</h2>
+        <div class="texture-preview" id="texture-preview"></div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.9.1/jszip.min.js"></script>
+<script>
+let zipFile;
+const previewContainer = document.getElementById('texture-preview');
+
+document.getElementById('file-upload').addEventListener('change', handleFileUpload);
+document.getElementById('hue').addEventListener('input', updatePreview);
+document.getElementById('saturation').addEventListener('input', updatePreview);
+document.getElementById('brightness').addEventListener('input', updatePreview);
+
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const zip = await JSZip.loadAsync(e.target.result);
+            zipFile = zip;
+            loadTextures(zip);
+        };
+        reader.readAsArrayBuffer(file);
     }
-    
-    // Determine file type based on its path.
-    const isBlock = path.includes("textures/block/");
-    const isItem = path.includes("textures/item/");
-    const isGui = path.includes("textures/gui") || path.includes("atlas") || path.includes("container");
-    
-    // If the file's category is deselected, skip it entirely.
-    if ((isBlock && !document.getElementById("includeBlocks").checked) ||
-        (isItem && !document.getElementById("includeItems").checked) ||
-        (isGui && !document.getElementById("includeGui").checked)) {
-      continue;
-    }
-    
-    // Process the image file using the enhanced hue-shift algorithm.
-    const blob = await file.async("blob");
-    const modifiedBlob = await enhancedShiftHue(blob, targetHue, primaryHex);
-    
-    // Create a preview element with a removal button.
-    const imgURL = URL.createObjectURL(modifiedBlob);
-    const wrapper = document.createElement("div");
-    wrapper.style.position = "relative";
-    
-    const img = document.createElement("img");
-    img.src = imgURL;
-    img.alt = path.split("/").pop();
-    img.title = path;
-    img.className = "preview-image";
-    wrapper.appendChild(img);
-    
-    const removeBtn = document.createElement("button");
-    removeBtn.textContent = "✕";
-    removeBtn.className = "remove-toggle";
-    removeBtn.onclick = () => {
-      wrapper.remove();
-      newZip.remove(path);
-    };
-    wrapper.appendChild(removeBtn);
-    previewGrid.appendChild(wrapper);
-    
-    // Add the modified file to the new zip.
-    newZip.file(path, modifiedBlob);
-    processedCount++;
-    document.getElementById("status").textContent = `Processed ${processedCount} of ${filePaths.length}`;
-  }
-  
-  // Generate the final zip and update the download link.
-  const resultBlob = await newZip.generateAsync({ type: "blob" });
-  const downloadLink = document.getElementById("downloadLink");
-  downloadLink.href = URL.createObjectURL(resultBlob);
-  downloadLink.style.display = "block";
-  document.getElementById("status").textContent = "Done! Ready to download.";
-});
-
-
-// --- Helper Functions ---
-
-// Convert hex color (e.g., "#ff00ff") to an [r, g, b] array.
-function hexToRgb(hex) {
-  const bigint = parseInt(hex.slice(1), 16);
-  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
 }
 
-// Convert RGB to HSL; returns [h, s, l] with h in degrees.
-function rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h, s, l = (max + min) / 2;
-  if (max === min) {
-    h = s = 0; // achromatic
-  } else {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch(max) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h /= 6;
-  }
-  return [h * 360, s, l];
-}
-
-// Convert HSL to RGB; returns [r, g, b].
-function hslToRgb(h, s, l) {
-  h /= 360;
-  let r, g, b;
-  if (s === 0) {
-    r = g = b = l;
-  } else {
-    const hue2rgb = (p, q, t) => {
-      if (t < 0) t += 1;
-      if (t > 1) t -= 1;
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-      return p;
-    };
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1/3);
-    g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1/3);
-  }
-  return [r * 255, g * 255, b * 255];
-}
-
-// Enhanced hue-shift function that also detects and adjusts lightness, saturation,
-// and contrast to improve recoloring quality. This also enables a proper result when white is selected.
-async function enhancedShiftHue(blob, targetHue, primaryHex) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = URL.createObjectURL(blob);
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      
-      // Determine if the target color is white.
-      const isWhiteTarget = primaryHex.toLowerCase() === "#ffffff";
-      
-      for (let i = 0; i < data.length; i += 4) {
-        // Skip nearly transparent pixels.
-        if (data[i + 3] < 10) continue;
-        let r = data[i], g = data[i + 1], b = data[i + 2];
-        
-        if (isWhiteTarget) {
-          // Convert the pixel to grayscale using standard luminance calculation.
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          // Brighten the pixel slightly to ensure it appears white while still showing detail.
-          let newVal = gray + (255 - gray) * 0.3;
-          newVal = Math.min(255, newVal);
-          data[i] = data[i + 1] = data[i + 2] = newVal;
-        } else {
-          // Convert the pixel to HSL.
-          let [h, s, l] = rgbToHsl(r, g, b);
-          
-          // Detect and adjust low saturation: if too unsaturated, boost it.
-          if (s < 0.3) s = Math.min(1, s * 1.3);
-          
-          // Adjust lightness to maintain contrast:
-          if (l < 0.3) l = Math.min(1, l * 1.2);
-          else if (l > 0.7) l = Math.max(0, l * 0.9);
-          
-          // Replace the hue with the target hue.
-          let [nr, ng, nb] = hslToRgb(targetHue, s, l);
-          data[i] = nr;
-          data[i + 1] = ng;
-          data[i + 2] = nb;
+async function loadTextures(zip) {
+    previewContainer.innerHTML = ''; // Clear previous previews
+    zip.forEach((relativePath, file) => {
+        if (file.name.match(/\.(png|jpg|jpeg)$/)) {
+            file.async("base64").then((data) => {
+                const img = new Image();
+                img.src = "data:image/png;base64," + data;
+                img.classList.add("texture-item");
+                img.onload = function() {
+                    previewContainer.appendChild(img);
+                };
+            });
         }
-      }
-      
-      ctx.putImageData(imageData, 0, 0);
-      canvas.toBlob(resolve, "image/png");
-    };
-  });
+    });
 }
 
-  </script>
+function updatePreview() {
+    if (zipFile) {
+        const hue = parseInt(document.getElementById('hue').value);
+        const saturation = parseInt(document.getElementById('saturation').value);
+        const brightness = parseInt(document.getElementById('brightness').value);
+
+        previewContainer.querySelectorAll('img').forEach((img) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            // Apply color adjustments (Hue, Saturation, Brightness)
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i];
+                let g = data[i + 1];
+                let b = data[i + 2];
+
+                // Convert RGB to HSL
+                let hsl = rgbToHsl(r, g, b);
+
+                // Apply adjustments
+                hsl[0] = (hsl[0] + hue / 360) % 1; // Hue adjustment
+                hsl[1] = Math.min(1, Math.max(0, hsl[1] * (saturation / 100))); // Saturation adjustment
+                hsl[2] = Math.min(1, Math.max(0, hsl[2] * (brightness / 100))); // Brightness adjustment
+
+                // Convert HSL back to RGB
+                let newRgb = hslToRgb(hsl[0], hsl[1], hsl[2]);
+
+                // Set adjusted pixel data
+                data[i] = newRgb[0];   // Red
+                data[i + 1] = newRgb[1]; // Green
+                data[i + 2] = newRgb[2]; // Blue
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            const newImage = new Image();
+            newImage.src = canvas.toDataURL();
+            newImage.classList.add("texture-item");
+            previewContainer.appendChild(newImage);
+        });
+    }
+}
+
+// RGB to HSL conversion
+function rgbToHsl(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    let max = Math.max(r, g, b);
+    let min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0; // achromatic
+    } else {
+        let d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+
+    return [h, s, l];
+}
+
+// HSL to RGB conversion
+function hslToRgb(h, s, l) {
+    let r, g, b;
+
+    if (s === 0) {
+        r = g = b = l; // achromatic
+    } else {
+        let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        let p = 2 * l - q;
+        r = hueToRgb(p, q, h + 1 / 3);
+        g = hueToRgb(p, q, h);
+        b = hueToRgb(p, q, h - 1 / 3);
+    }
+
+    return [r * 255, g * 255, b * 255];
+}
+
+// Helper function to calculate RGB value from hue
+function hueToRgb(p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+}
+
+</script>
+
 </body>
 </html>
