@@ -757,12 +757,474 @@
             });
             
             // Download button
-            downloadBtn.addEventListener('click', () => {
-                // In a real implementation, this would bundle the recolored textures
-                // For now, we'll just show an alert
-                alert('In a real implementation, this would download your recolored texture pack!');
+            // Download button handler - replacing the placeholder alert
+downloadBtn.addEventListener('click', async () => {
+    if (!texturePackData) {
+        alert('Please upload a texture pack first');
+        return;
+    }
+    
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Preparing textures for download...';
+    
+    try {
+        // Create a new JSZip instance for the output
+        const outputZip = new JSZip();
+        
+        // Get current settings
+        const hue = parseInt(hueSlider.value);
+        const saturation = parseInt(saturationSlider.value) / 100;
+        const contrast = parseInt(contrastSlider.value) / 100;
+        const brightness = parseInt(brightnessSlider.value) / 100;
+        
+        // Process each texture in the pack
+        const totalFiles = Object.keys(texturePackData.files).length;
+        let processedCount = 0;
+        
+        for (const [filePath, fileData] of Object.entries(texturePackData.files)) {
+            // Skip non-image files and copy them directly
+            if (!filePath.match(/\.(png|jpg|jpeg)$/i)) {
+                outputZip.file(filePath, fileData);
+                processedCount++;
+                updateProgressBar(processedCount, totalFiles);
+                continue;
+            }
+            
+            // Skip mob textures - NEVER recolor mobs
+            if (mobTexturePatterns.some(pattern => filePath.toLowerCase().includes(pattern))) {
+                outputZip.file(filePath, fileData);
+                processedCount++;
+                updateProgressBar(processedCount, totalFiles);
+                continue;
+            }
+            
+            // Check if the item belongs to a selected group
+            const belongsToSelectedGroup = selectedItemGroups.some(group => {
+                return itemTypeMapping[group].some(type => filePath.toLowerCase().includes(type));
             });
+            
+            // Skip if it doesn't belong to any selected group or isn't an item texture
+            if (!belongsToSelectedGroup && !filePath.includes('item') && !filePath.includes('textures/items')) {
+                outputZip.file(filePath, fileData);
+                processedCount++;
+                updateProgressBar(processedCount, totalFiles);
+                continue;
+            }
+            
+            // Now process the image
+            try {
+                // Create blob URL from file data
+                const blob = new Blob([fileData]);
+                const imageUrl = URL.createObjectURL(blob);
+                
+                // Load the image
+                const img = new Image();
+                
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = imageUrl;
+                });
+                
+                // Create canvas and context
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                
+                // Draw the original image
+                ctx.drawImage(img, 0, 0);
+                
+                // Apply color transformations based on selected mode
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+                
+                for (let i = 0; i < pixels.length; i += 4) {
+                    // Skip fully transparent pixels
+                    if (pixels[i + 3] === 0) continue;
+                    
+                    // Convert RGB to HSL
+                    const r = pixels[i] / 255;
+                    const g = pixels[i + 1] / 255;
+                    const b = pixels[i + 2] / 255;
+                    
+                    const max = Math.max(r, g, b);
+                    const min = Math.min(r, g, b);
+                    let h, s, l = (max + min) / 2;
+                    
+                    if (max === min) {
+                        h = s = 0; // achromatic
+                    } else {
+                        const d = max - min;
+                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                        
+                        switch (max) {
+                            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                            case g: h = (b - r) / d + 2; break;
+                            case b: h = (r - g) / d + 4; break;
+                        }
+                        
+                        h /= 6;
+                    }
+                    
+                    // Apply transformations based on color mode
+                    switch (selectedColorMode) {
+                        case 'hue-shift':
+                            // Shift hue
+                            h = (h + hue / 360) % 1;
+                            // Adjust saturation
+                            s = Math.min(1, Math.max(0, s * saturation));
+                            break;
+                            
+                        case 'overlay':
+                            // Create a colored overlay effect
+                            h = hue / 360;
+                            // Mix original and new saturation
+                            s = Math.min(1, Math.max(0, (s + 0.5) / 2 * saturation));
+                            break;
+                            
+                        case 'tint':
+                            // Partly desaturate then apply new hue as a tint
+                            h = (h * 0.3 + hue / 360 * 0.7) % 1;
+                            // Reduce original saturation then apply new
+                            s = Math.min(1, Math.max(0, s * 0.7 * saturation));
+                            break;
+                    }
+                    
+                    // Apply brightness and contrast
+                    l = Math.min(1, Math.max(0, (l - 0.5) * contrast + 0.5));
+                    l = Math.min(1, Math.max(0, l * brightness));
+                    
+                    // Convert back to RGB
+                    let r1, g1, b1;
+                    
+                    if (s === 0) {
+                        r1 = g1 = b1 = l; // achromatic
+                    } else {
+                        const hue2rgb = (p, q, t) => {
+                            if (t < 0) t += 1;
+                            if (t > 1) t -= 1;
+                            if (t < 1/6) return p + (q - p) * 6 * t;
+                            if (t < 1/2) return q;
+                            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                            return p;
+                        };
+                        
+                        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                        const p = 2 * l - q;
+                        
+                        r1 = hue2rgb(p, q, h + 1/3);
+                        g1 = hue2rgb(p, q, h);
+                        b1 = hue2rgb(p, q, h - 1/3);
+                    }
+                    
+                    // Update pixel values
+                    pixels[i] = Math.round(r1 * 255);
+                    pixels[i + 1] = Math.round(g1 * 255);
+                    pixels[i + 2] = Math.round(b1 * 255);
+                }
+                
+                // Put the modified image data back on the canvas
+                ctx.putImageData(imageData, 0, 0);
+                
+                // Convert canvas to blob
+                const newImageBlob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, 'image/png');
+                });
+                
+                // Add the processed image to the output zip
+                outputZip.file(filePath, newImageBlob);
+                
+                // Cleanup
+                URL.revokeObjectURL(imageUrl);
+                
+                // Update progress
+                processedCount++;
+                updateProgressBar(processedCount, totalFiles);
+                
+            } catch (err) {
+                console.error(`Error processing image ${filePath}:`, err);
+                // If processing fails, include original file
+                outputZip.file(filePath, fileData);
+                processedCount++;
+                updateProgressBar(processedCount, totalFiles);
+            }
+        }
+        
+        // Generate the zip file
+        progressText.textContent = 'Generating texture pack...';
+        const content = await outputZip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 5 }
+        }, (metadata) => {
+            progressBar.style.width = `${metadata.percent}%`;
         });
+        
+        // Create a download link
+        const packName = texturePackData.name || 'minecraft-texture-pack';
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+        const fileName = `${packName}-recolored-${timestamp}.zip`;
+        
+        const downloadUrl = URL.createObjectURL(content);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        
+        // Start download
+        progressText.textContent = 'Download starting...';
+        link.click();
+        
+        // Cleanup
+        setTimeout(() => {
+            URL.revokeObjectURL(downloadUrl);
+            progressText.textContent = 'Download complete!';
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 2000);
+        }, 100);
+        
+    } catch (error) {
+        console.error('Error creating texture pack:', error);
+        progressText.textContent = 'Error: Failed to create texture pack';
+        progressBar.style.width = '0%';
+    }
+});
+
+// Helper to update progress bar
+function updateProgressBar(current, total) {
+    const percentage = Math.round((current / total) * 100);
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = `Processing textures: ${current} of ${total} (${percentage}%)`;
+}
+
+// File handling function - processes the uploaded zip file
+async function processTexturePack(file) {
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Reading texture pack...';
+    
+    try {
+        // Load the zip file
+        const zip = new JSZip();
+        const zipData = await zip.loadAsync(file);
+        
+        // Initialize texture pack data
+        texturePackData = {
+            name: file.name.replace('.zip', ''),
+            files: {}
+        };
+        
+        // Count total files for progress
+        const totalFiles = Object.keys(zipData.files).length;
+        let processedCount = 0;
+        
+        // Process each file in the zip
+        for (const [path, zipObj] of Object.entries(zipData.files)) {
+            // Skip directories
+            if (zipObj.dir) {
+                processedCount++;
+                updateProgressBar(processedCount, totalFiles);
+                continue;
+            }
+            
+            // Read file content
+            const content = await zipObj.async('arraybuffer');
+            texturePackData.files[path] = content;
+            
+            // If it's an image, create preview data
+            if (path.match(/\.(png|jpg|jpeg)$/i) && 
+                !mobTexturePatterns.some(pattern => path.toLowerCase().includes(pattern)) &&
+                (path.includes('item') || path.includes('textures/items'))) {
+                
+                // Store some sample images for preview
+                if (Object.keys(processedImages).length < 4) {
+                    const blob = new Blob([content]);
+                    const imageUrl = URL.createObjectURL(blob);
+                    processedImages[path] = imageUrl;
+                    
+                    // If this is our first preview image, show it
+                    if (Object.keys(processedImages).length === 1) {
+                        originalPreview.innerHTML = `<img src="${imageUrl}" alt="Original Texture Preview">`;
+                        // Also create initial recolored preview
+                        updateRecoloredPreview();
+                    }
+                }
+            }
+            
+            // Update progress
+            processedCount++;
+            updateProgressBar(processedCount, totalFiles);
+        }
+        
+        // Enable download button
+        downloadBtn.disabled = false;
+        progressText.textContent = 'Texture pack processed successfully!';
+        
+        // Hide progress after a delay
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error processing texture pack:', error);
+        progressText.textContent = 'Error: Failed to process texture pack';
+        progressBar.style.width = '0%';
+        
+        // Show upload area again
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            uploadArea.style.display = 'block';
+        }, 3000);
+    }
+}
+
+// Update the handleFileUpload function to use our new processTexturePack function
+function handleFileUpload(file) {
+    if (file.type !== 'application/zip' && !file.name.endsWith('.zip')) {
+        alert('Please upload a valid Minecraft texture pack (.zip)');
+        return;
+    }
+    
+    // Hide upload area
+    uploadArea.style.display = 'none';
+    
+    // Process the texture pack
+    processTexturePack(file);
+}
+
+// Update recolored preview based on actual texture data
+function updateRecoloredPreview() {
+    // Get first preview image
+    const firstPreviewPath = Object.keys(processedImages)[0];
+    
+    if (firstPreviewPath) {
+        const originalUrl = processedImages[firstPreviewPath];
+        
+        // Create an image element for processing
+        const img = new Image();
+        img.onload = () => {
+            // Create canvas and context
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw the original image
+            ctx.drawImage(img, 0, 0);
+            
+            // Apply color transformations
+            const hue = parseInt(hueSlider.value);
+            const saturation = parseInt(saturationSlider.value) / 100;
+            const contrast = parseInt(contrastSlider.value) / 100;
+            const brightness = parseInt(brightnessSlider.value) / 100;
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            
+            for (let i = 0; i < pixels.length; i += 4) {
+                // Skip fully transparent pixels
+                if (pixels[i + 3] === 0) continue;
+                
+                // Convert RGB to HSL
+                const r = pixels[i] / 255;
+                const g = pixels[i + 1] / 255;
+                const b = pixels[i + 2] / 255;
+                
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                let h, s, l = (max + min) / 2;
+                
+                if (max === min) {
+                    h = s = 0; // achromatic
+                } else {
+                    const d = max - min;
+                    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                    
+                    switch (max) {
+                        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                        case g: h = (b - r) / d + 2; break;
+                        case b: h = (r - g) / d + 4; break;
+                    }
+                    
+                    h /= 6;
+                }
+                
+                // Apply transformations based on color mode
+                switch (selectedColorMode) {
+                    case 'hue-shift':
+                        // Shift hue
+                        h = (h + hue / 360) % 1;
+                        // Adjust saturation
+                        s = Math.min(1, Math.max(0, s * saturation));
+                        break;
+                        
+                    case 'overlay':
+                        // Create a colored overlay effect
+                        h = hue / 360;
+                        // Mix original and new saturation
+                        s = Math.min(1, Math.max(0, (s + 0.5) / 2 * saturation));
+                        break;
+                        
+                    case 'tint':
+                        // Partly desaturate then apply new hue as a tint
+                        h = (h * 0.3 + hue / 360 * 0.7) % 1;
+                        // Reduce original saturation then apply new
+                        s = Math.min(1, Math.max(0, s * 0.7 * saturation));
+                        break;
+                }
+                
+                // Apply brightness and contrast
+                l = Math.min(1, Math.max(0, (l - 0.5) * contrast + 0.5));
+                l = Math.min(1, Math.max(0, l * brightness));
+                
+                // Convert back to RGB
+                let r1, g1, b1;
+                
+                if (s === 0) {
+                    r1 = g1 = b1 = l; // achromatic
+                } else {
+                    const hue2rgb = (p, q, t) => {
+                        if (t < 0) t += 1;
+                        if (t > 1) t -= 1;
+                        if (t < 1/6) return p + (q - p) * 6 * t;
+                        if (t < 1/2) return q;
+                        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                        return p;
+                    };
+                    
+                    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                    const p = 2 * l - q;
+                    
+                    r1 = hue2rgb(p, q, h + 1/3);
+                    g1 = hue2rgb(p, q, h);
+                    b1 = hue2rgb(p, q, h - 1/3);
+                }
+                
+                // Update pixel values
+                pixels[i] = Math.round(r1 * 255);
+                pixels[i + 1] = Math.round(g1 * 255);
+                pixels[i + 2] = Math.round(b1 * 255);
+            }
+            
+            // Put the modified image data back on the canvas
+            ctx.putImageData(imageData, 0, 0);
+            
+            // Display the recolored image
+            recoloredPreview.innerHTML = '';
+            const img2 = new Image();
+            img2.src = canvas.toDataURL('image/png');
+            recoloredPreview.appendChild(img2);
+        };
+        
+        img.src = originalUrl;
+    } else {
+        // No preview image available yet
+        recoloredPreview.innerHTML = 'No texture pack loaded';
+    }
+}
+
     </script>
 </body>
 </html>
