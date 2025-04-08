@@ -100,9 +100,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.9.1/jszip.min.js"></script>
 <script>
 let zipFile;
-const previewContainer = document.getElementById('texture-preview');
+let textures = [];
+let batchSize = 100; // Process 100 textures at a time
+let currentBatch = 0;
 
 document.getElementById('file-upload').addEventListener('change', handleFileUpload);
+document.getElementById('process-button').addEventListener('click', processTextures);
 document.getElementById('hue').addEventListener('input', updatePreview);
 document.getElementById('saturation').addEventListener('input', updatePreview);
 document.getElementById('brightness').addEventListener('input', updatePreview);
@@ -121,28 +124,53 @@ function handleFileUpload(event) {
 }
 
 async function loadTextures(zip) {
-    previewContainer.innerHTML = ''; // Clear previous previews
+    textures = []; // Clear the existing textures list
     zip.forEach((relativePath, file) => {
         if (file.name.match(/\.(png|jpg|jpeg)$/)) {
             file.async("base64").then((data) => {
-                const img = new Image();
-                img.src = "data:image/png;base64," + data;
-                img.classList.add("texture-item");
-                img.onload = function() {
-                    previewContainer.appendChild(img);
-                };
+                textures.push({
+                    name: file.name,
+                    data: data
+                });
             });
         }
     });
 }
 
 function updatePreview() {
-    if (zipFile) {
-        const hue = parseInt(document.getElementById('hue').value);
-        const saturation = parseInt(document.getElementById('saturation').value);
-        const brightness = parseInt(document.getElementById('brightness').value);
+    const hue = parseInt(document.getElementById('hue').value);
+    const saturation = parseInt(document.getElementById('saturation').value);
+    const brightness = parseInt(document.getElementById('brightness').value);
 
-        previewContainer.querySelectorAll('img').forEach((img) => {
+    // Update the preview with the current adjustments (just for visual feedback)
+    previewContainer.innerHTML = '';
+    textures.slice(0, batchSize).forEach((texture) => {
+        const img = new Image();
+        img.src = "data:image/png;base64," + texture.data;
+        img.classList.add("texture-item");
+        img.onload = function() {
+            previewContainer.appendChild(img);
+        };
+    });
+}
+
+function processTextures() {
+    if (currentBatch * batchSize >= textures.length) {
+        alert("All textures have been processed.");
+        return; // All textures are processed, stop
+    }
+
+    const hue = parseInt(document.getElementById('hue').value);
+    const saturation = parseInt(document.getElementById('saturation').value);
+    const brightness = parseInt(document.getElementById('brightness').value);
+
+    // Process a batch of textures (100 textures at a time)
+    for (let i = currentBatch * batchSize; i < Math.min((currentBatch + 1) * batchSize, textures.length); i++) {
+        const texture = textures[i];
+        const img = new Image();
+        img.src = "data:image/png;base64," + texture.data;
+
+        img.onload = function() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = img.width;
@@ -152,11 +180,11 @@ function updatePreview() {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
 
-            // Apply color adjustments (Hue, Saturation, Brightness)
-            for (let i = 0; i < data.length; i += 4) {
-                let r = data[i];
-                let g = data[i + 1];
-                let b = data[i + 2];
+            // Apply adjustments (Hue, Saturation, Brightness)
+            for (let j = 0; j < data.length; j += 4) {
+                let r = data[j];
+                let g = data[j + 1];
+                let b = data[j + 2];
 
                 // Convert RGB to HSL
                 let hsl = rgbToHsl(r, g, b);
@@ -170,9 +198,9 @@ function updatePreview() {
                 let newRgb = hslToRgb(hsl[0], hsl[1], hsl[2]);
 
                 // Set adjusted pixel data
-                data[i] = newRgb[0];   // Red
-                data[i + 1] = newRgb[1]; // Green
-                data[i + 2] = newRgb[2]; // Blue
+                data[j] = newRgb[0];   // Red
+                data[j + 1] = newRgb[1]; // Green
+                data[j + 2] = newRgb[2]; // Blue
             }
 
             ctx.putImageData(imageData, 0, 0);
@@ -181,11 +209,12 @@ function updatePreview() {
             newImage.src = canvas.toDataURL();
             newImage.classList.add("texture-item");
             previewContainer.appendChild(newImage);
-        });
+        };
     }
+
+    currentBatch++; // Move to the next batch
 }
 
-// RGB to HSL conversion
 function rgbToHsl(r, g, b) {
     r /= 255;
     g /= 255;
@@ -211,7 +240,6 @@ function rgbToHsl(r, g, b) {
     return [h, s, l];
 }
 
-// HSL to RGB conversion
 function hslToRgb(h, s, l) {
     let r, g, b;
 
@@ -228,7 +256,6 @@ function hslToRgb(h, s, l) {
     return [r * 255, g * 255, b * 255];
 }
 
-// Helper function to calculate RGB value from hue
 function hueToRgb(p, q, t) {
     if (t < 0) t += 1;
     if (t > 1) t -= 1;
