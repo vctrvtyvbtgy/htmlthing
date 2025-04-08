@@ -9,23 +9,23 @@
 </head>
 <body>
   <div class="container">
-    <h1>🎨 Minecraft Item Texture Modifier</h1>
+    <h1>Texture Modifier</h1>
     <form id="textureForm">
-      <label for="packInput">Upload Resource Pack (.zip):</label>
+      <label for="packInput">Resource Pack (.zip):</label>
       <input type="file" id="packInput" accept=".zip" required />
 
-      <label for="huePicker">Choose Target Hue:</label>
+      <label for="huePicker">Target Hue:</label>
       <input type="color" id="huePicker" value="#ff00ff" />
 
-      <button type="submit">Process Pack</button>
+      <button type="submit">Apply</button>
     </form>
 
     <div id="status">Status: Waiting...</div>
     <progress id="progressBar" value="0" max="100" style="width: 100%; margin-top: 10px;"></progress>
-    <a id="downloadLink" style="display:none; margin-top: 1rem;" download="ModifiedPack.zip">Download Modified Pack</a>
+    <a id="downloadLink" style="display:none; margin-top: 1rem;" download="ModifiedPack.zip">Download</a>
 
     <div id="previewContainer">
-      <h3>Modified Textures</h3>
+      <h3>Preview</h3>
       <div id="previewGrid"></div>
     </div>
   </div>
@@ -101,7 +101,6 @@
           for (let i = 0; i < data.length; i += 4) {
             const alpha = data[i + 3];
             if (alpha < 10) continue;
-
             const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
             const [r, g, b] = hslToRgb(targetHue, s, l);
             data[i] = r;
@@ -113,6 +112,18 @@
           canvas.toBlob(resolve, 'image/png');
         };
       });
+    }
+
+    async function isBlockItem(path, zip) {
+      const modelPath = path.replace("textures/item/", "models/item/").replace(".png", ".json");
+      try {
+        const modelFile = await zip.file(modelPath)?.async("string");
+        if (!modelFile) return false;
+        const model = JSON.parse(modelFile);
+        return model.parent?.includes("block") || false;
+      } catch {
+        return false;
+      }
     }
 
     form.addEventListener("submit", async (e) => {
@@ -136,26 +147,21 @@
       const newZip = new JSZip();
       const texturePaths = [];
 
-      zip.forEach((relativePath, file) => {
-        const isTexture = relativePath.includes("textures/") && relativePath.endsWith(".png");
-        const isNotBlocked = !relativePath.includes("textures/block") &&
-                              !relativePath.includes("textures/entity") &&
-                              !relativePath.includes("textures/mob") &&
-                              !relativePath.includes("textures/gui") &&
-                              !relativePath.includes("atlas") &&
-                              !relativePath.includes("container");
+      for (const relativePath in zip.files) {
+        const file = zip.files[relativePath];
+        const isTexture = relativePath.includes("textures/item/") && relativePath.endsWith(".png");
+        const isGui = relativePath.includes("textures/gui") || relativePath.includes("atlas") || relativePath.includes("container");
 
-        if (isTexture && isNotBlocked) {
+        if (isTexture && !isGui && !(await isBlockItem(relativePath, zip))) {
           texturePaths.push(relativePath);
         } else if (!relativePath.endsWith(".png")) {
           newZip.file(relativePath, file.async("arraybuffer"));
         } else {
-          // Copy unmodified PNGs (like blocks, GUI, etc)
           zip.file(relativePath).async("arraybuffer").then(data => {
             newZip.file(relativePath, data);
           });
         }
-      });
+      }
 
       let completed = 0;
       for (const path of texturePaths) {
@@ -189,8 +195,8 @@
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #2b0f49, #6a1b9a, #d81b60);
-      color: white;
+      background: #0a0a0a;
+      color: #ffffff;
       display: flex;
       justify-content: center;
       align-items: start;
@@ -199,40 +205,46 @@
     }
 
     .container {
-      background: rgba(255, 255, 255, 0.05);
+      background: #121212;
       padding: 2rem;
-      border-radius: 20px;
-      box-shadow: 0 0 20px rgba(255, 105, 180, 0.4);
+      border-radius: 16px;
+      box-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
       max-width: 600px;
       width: 100%;
     }
 
     h1 {
       text-align: center;
+      font-weight: 500;
+      font-size: 1.8rem;
       margin-bottom: 1rem;
+      text-transform: uppercase;
     }
 
     label {
       display: block;
       margin: 1rem 0 0.5rem;
+      color: #ccc;
     }
 
     input[type="file"],
     input[type="color"] {
       width: 100%;
-      padding: 0.4rem;
-      border-radius: 10px;
+      padding: 0.6rem;
+      border-radius: 12px;
       border: none;
       margin-bottom: 1rem;
+      background: #222;
+      color: white;
     }
 
     button {
       width: 100%;
       padding: 0.75rem;
-      background-color: #9c27b0;
+      background-color: #ffffff;
       border: none;
-      color: white;
-      font-weight: bold;
+      color: black;
+      font-weight: 500;
       font-size: 1rem;
       border-radius: 12px;
       cursor: pointer;
@@ -240,7 +252,7 @@
     }
 
     button:hover {
-      background-color: #ab47bc;
+      background-color: #e0e0e0;
     }
 
     #previewContainer {
@@ -257,10 +269,13 @@
     .preview-image {
       width: 64px;
       height: 64px;
-      border: 2px solid #fff;
+      border: 2px solid #444;
       border-radius: 8px;
       image-rendering: pixelated;
     }
   </style>
 </body>
 </html>
+
+
+
