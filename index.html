@@ -69,14 +69,12 @@
               </div>
 
               <div class="form-group hidden" id="gradientGroup">
-  <label>GRADIENT COLORS</label>
-  <div id="gradientColorsContainer" class="gradient-pickers"></div>
-  <button type="button" id="addGradientStop" class="control-button">
-    <i class="fas fa-plus"></i> Add Color
-  </button>
-  <div class="gradient-preview" id="multiGradientPreview"></div>
-</div>
-
+                <label>GRADIENT COLORS</label>
+                <div class="gradient-pickers">
+                  <div class="color-picker-container">
+                    <input type="color" id="gradientStart" value="#ff0000" />
+                    <span class="color-indicator"></span>
+                  </div>
                   <div class="gradient-separator">
                     <i class="fas fa-arrow-right"></i>
                   </div>
@@ -140,19 +138,8 @@
             <div class="empty-state">
               <i class="fas fa-paint-brush"></i>
               <p>No saved designs yet. Create and save your first design from the Recolor tab.</p>
-            
             </div>
           </div>
-          <div class="form-group">
-  <button id="saveDesign" class="control-button">
-    <i class="fas fa-save"></i> Save Design
-  </button>
-  <button id="loadDesign" class="control-button">
-    <i class="fas fa-folder-open"></i> Load Design
-  </button>
-</div>
-
-        
         </div>
 
         <!-- Settings Tab -->
@@ -731,143 +718,6 @@
       document.getElementById(target).classList.add('active');
     });
   });
-
-
-  // --- MULTI-COLOR GRADIENT SYSTEM ---
-let gradientStops = ['#ff0000', '#00ff00', '#0000ff'];
-
-function renderGradientInputs() {
-  const container = document.getElementById('gradientColorsContainer');
-  container.innerHTML = '';
-
-  gradientStops.forEach((color, index) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'color-picker-container';
-
-    const input = document.createElement('input');
-    input.type = 'color';
-    input.value = color;
-
-    const indicator = document.createElement('span');
-    indicator.className = 'color-indicator';
-    indicator.style.backgroundColor = color;
-
-    input.addEventListener('input', () => {
-      gradientStops[index] = input.value;
-      indicator.style.backgroundColor = input.value;
-      updateGradientPreview();
-    });
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(indicator);
-    container.appendChild(wrapper);
-  });
-}
-
-function updateGradientPreview() {
-  const preview = document.getElementById('multiGradientPreview');
-  if (!preview) return;
-  const gradientStr = gradientStops.join(', ');
-  preview.style.background = `linear-gradient(to bottom, ${gradientStr})`;
-}
-
-function getGradientColorAtPosition(pos, stops) {
-  const total = stops.length - 1;
-  const scaled = pos * total;
-  const index = Math.floor(scaled);
-  const t = scaled - index;
-
-  const start = stops[index] || stops[0];
-  const end = stops[index + 1] || stops[stops.length - 1];
-
-  const startRGB = hexToRgb(start);
-  const endRGB = hexToRgb(end);
-
-  const r = Math.round(startRGB.r + (endRGB.r - startRGB.r) * t);
-  const g = Math.round(startRGB.g + (endRGB.g - startRGB.g) * t);
-  const b = Math.round(startRGB.b + (endRGB.b - startRGB.b) * t);
-
-  return [r, g, b];
-}
-
-function hexToRgb(hex) {
-  return {
-    r: parseInt(hex.slice(1, 3), 16),
-    g: parseInt(hex.slice(3, 5), 16),
-    b: parseInt(hex.slice(5, 7), 16)
-  };
-}
-
-document.getElementById('addGradientStop')?.addEventListener('click', () => {
-  if (gradientStops.length < 8) {
-    gradientStops.push('#ffffff');
-    renderGradientInputs();
-    updateGradientPreview();
-  }
-});
-
-renderGradientInputs();
-updateGradientPreview();
-
-// --- UPDATE SHIFT HUE TO USE MULTI-COLOR GRADIENT ---
-const originalShiftHue = shiftHue;
-shiftHue = async function (blob, targetHue, isGradient = false, start = '#ff0000', end = '#0000ff') {
-  return originalShiftHue(blob, targetHue, isGradient, gradientStops);
-};
-
-// --- EXPAND TEXTURE FILTER SUPPORT ---
-const originalShouldProcessTexture = shouldProcessTexture;
-shouldProcessTexture = function (path) {
-  const includeItems = document.getElementById('includeItems')?.checked;
-  const includeArmor = document.getElementById('includeArmor')?.checked;
-  const includeBlocks = document.getElementById('includeBlocks')?.checked;
-  const includeEntities = document.getElementById('includeEntities')?.checked;
-  const includeGUI = document.getElementById('includeGUI')?.checked;
-
-  if (path.includes("textures/item/") && includeItems) return true;
-  if (path.includes("textures/models/armor") && includeArmor) return true;
-  if (path.includes("textures/block") && includeBlocks) return true;
-  if (path.includes("textures/entity") && includeEntities) return true;
-  if ((path.includes("textures/gui") || path.includes("container")) && includeGUI) return true;
-
-  return false;
-};
-
-// --- DESIGN SAVE/LOAD ---
-document.getElementById('saveDesign')?.addEventListener('click', () => {
-  const design = {
-    colorMode: document.querySelector('input[name="colorMode"]:checked').value,
-    solidColor: document.getElementById('huePicker')?.value,
-    gradientStops,
-    settings: {
-      saturation: document.getElementById('saturationAdjust')?.value,
-      brightness: document.getElementById('brightnessAdjust')?.value,
-      shading: document.getElementById('preserveShading')?.checked,
-      grayscale: document.getElementById('ignoreGrayscale')?.checked
-    }
-  };
-  localStorage.setItem('savedDesign', JSON.stringify(design));
-  alert('🎨 Design saved!');
-});
-
-document.getElementById('loadDesign')?.addEventListener('click', () => {
-  const design = JSON.parse(localStorage.getItem('savedDesign'));
-  if (!design) return alert('No design saved.');
-
-  document.querySelector(`input[name="colorMode"][value="${design.colorMode}"]`)?.click();
-  document.getElementById('huePicker').value = design.solidColor;
-  document.getElementById('saturationAdjust').value = design.settings.saturation;
-  document.getElementById('brightnessAdjust').value = design.settings.brightness;
-  document.getElementById('preserveShading').checked = design.settings.shading;
-  document.getElementById('ignoreGrayscale').checked = design.settings.grayscale;
-
-  gradientStops = design.gradientStops || ['#ff0000', '#0000ff'];
-  renderGradientInputs();
-  updateGradientPreview();
-
-  alert('✅ Design loaded!');
-});
-
 </script>
 
  
