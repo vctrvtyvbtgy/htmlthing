@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Minecraft Texture Recolor</title>
-  <link rel="stylesheet" href="styles.css"/>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js"></script>
 </head>
 <body>
   <div class="container">
     <h1>🎨 Minecraft Item Texture Modifier</h1>
-
     <form id="textureForm">
       <label for="packInput">Upload Resource Pack (.zip):</label>
       <input type="file" id="packInput" accept=".zip" required />
@@ -25,10 +25,78 @@
       <button type="submit">Process Pack</button>
     </form>
 
-    <div id="status"></div>
-    <a id="downloadLink" style="display:none;" download="ModifiedPack.zip">Download Modified Pack</a>
+    <div id="status">Status: Waiting...</div>
+    <progress id="progressBar" value="0" max="100" style="width: 100%; margin-top: 10px;"></progress>
+    <a id="downloadLink" style="display:none; margin-top: 1rem;" download="ModifiedPack.zip">Download Modified Pack</a>
+
+    <div id="previewContainer">
+      <h3>Modified Textures</h3>
+      <div id="previewGrid"></div>
+    </div>
   </div>
 
-  <script src="script.js"></script>
+  <script>
+    const form = document.getElementById("textureForm");
+    const status = document.getElementById("status");
+    const previewGrid = document.getElementById("previewGrid");
+    const progressBar = document.getElementById("progressBar");
+    const downloadLink = document.getElementById("downloadLink");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const file = document.getElementById("packInput").files[0];
+      const hue = document.getElementById("huePicker").value;
+      const mode = document.querySelector("input[name='mode']:checked").value;
+
+      if (!file) return;
+
+      status.textContent = "Reading pack...";
+      previewGrid.innerHTML = "";
+      progressBar.value = 0;
+
+      const zip = await JSZip.loadAsync(file);
+      const newZip = new JSZip();
+      const texturePaths = [];
+
+      zip.forEach((relativePath, file) => {
+        if (relativePath.includes("textures/item") && relativePath.endsWith(".png")) {
+          texturePaths.push(relativePath);
+        } else {
+          newZip.file(relativePath, file.async("arraybuffer"));
+        }
+      });
+
+      let completed = 0;
+      for (const path of texturePaths) {
+        const imgData = await zip.file(path).async("uint8array");
+
+        // Placeholder: Apply image transformation based on mode
+        const modifiedBlob = new Blob([imgData], { type: "image/png" });
+
+        // Add to preview grid
+        const imgURL = URL.createObjectURL(modifiedBlob);
+        const img = document.createElement("img");
+        img.src = imgURL;
+        img.alt = path.split("/").pop();
+        img.title = path;
+        img.classList.add("preview-image");
+        previewGrid.appendChild(img);
+
+        // Save to new zip
+        newZip.file(path, modifiedBlob);
+
+        completed++;
+        progressBar.value = (completed / texturePaths.length) * 100;
+        status.textContent = `Processed ${completed} of ${texturePaths.length}`;
+        await new Promise(r => setTimeout(r, 10));
+      }
+
+      const resultBlob = await newZip.generateAsync({ type: "blob" });
+      downloadLink.href = URL.createObjectURL(resultBlob);
+      downloadLink.style.display = "block";
+      status.textContent = "Done! Ready to download.";
+    });
+  </script>
 </body>
 </html>
