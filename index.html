@@ -59,6 +59,8 @@
 
     input[type="checkbox"] {
       margin-right: 0.5rem;
+      transform: scale(1.2);
+      accent-color: #e50914;
     }
 
     .checkbox-group label {
@@ -108,13 +110,19 @@
       position: absolute;
       top: 2px;
       right: 2px;
-      background: rgba(255, 0, 0, 0.7);
-      color: white;
-      border: none;
+      background: #1a1a1a;
+      color: #e50914;
+      border: 1px solid #e50914;
       border-radius: 50%;
-      font-size: 0.7rem;
-      padding: 2px 6px;
+      font-size: 0.8rem;
+      padding: 1px 5px;
       cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .remove-toggle:hover {
+      background: #e50914;
+      color: white;
     }
   </style>
 </head>
@@ -125,8 +133,18 @@
       <label for="packInput">Resource Pack (.zip):</label>
       <input type="file" id="packInput" accept=".zip" required />
 
-      <label for="huePicker">Target Hue:</label>
+      <label for="huePicker">Primary Color:</label>
       <input type="color" id="huePicker" value="#ff00ff" />
+
+      <label for="secondaryColor">Secondary Color (for gradient):</label>
+      <input type="color" id="secondaryColor" value="#00ffff" />
+
+      <label for="colorMode">Color Mode:</label>
+      <select id="colorMode">
+        <option value="hue">Hue Shift</option>
+        <option value="tint">Tint</option>
+        <option value="gradient">Gradient Map</option>
+      </select>
 
       <div class="checkbox-group">
         <label><input type="checkbox" id="includeBlocks" checked /> Include Blocks</label>
@@ -148,15 +166,9 @@
   </div>
 
   <script>
-    const form = document.getElementById("textureForm");
-    const status = document.getElementById("status");
-    const previewGrid = document.getElementById("previewGrid");
-    const progressBar = document.getElementById("progressBar");
-    const downloadLink = document.getElementById("downloadLink");
-
-    const includeBlocks = document.getElementById("includeBlocks");
-    const includeItems = document.getElementById("includeItems");
-    const includeGui = document.getElementById("includeGui");
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
 
     function rgbToHsl(r, g, b) {
       r /= 255; g /= 255; b /= 255;
@@ -175,14 +187,12 @@
         }
         h /= 6;
       }
-
       return [h * 360, s, l];
     }
 
     function hslToRgb(h, s, l) {
       h /= 360;
       let r, g, b;
-
       if (s === 0) {
         r = g = b = l;
       } else {
@@ -194,19 +204,30 @@
           if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
           return p;
         };
-
         const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
         const p = 2 * l - q;
-
         r = hue2rgb(p, q, h + 1 / 3);
         g = hue2rgb(p, q, h);
         b = hue2rgb(p, q, h - 1 / 3);
       }
-
       return [r * 255, g * 255, b * 255];
     }
 
-    async function shiftHue(blob, targetHue) {
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.slice(1), 16);
+      return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+    }
+
+    function applyGradientMap(r, g, b, startRGB, endRGB) {
+      const brightness = (r + g + b) / (3 * 255);
+      return [
+        lerp(startRGB[0], endRGB[0], brightness),
+        lerp(startRGB[1], endRGB[1], brightness),
+        lerp(startRGB[2], endRGB[2], brightness)
+      ];
+    }
+
+    async function shiftHue(blob, targetHue, mode, secondaryHex) {
       return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(blob);
@@ -218,15 +239,29 @@
           ctx.drawImage(img, 0, 0);
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
+          const secondaryRGB = hexToRgb(secondaryHex);
 
           for (let i = 0; i < data.length; i += 4) {
             const alpha = data[i + 3];
             if (alpha < 10) continue;
-            const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-            const [r, g, b] = hslToRgb(targetHue, s, l);
-            data[i] = r;
-            data[i + 1] = g;
-            data[i + 2] = b;
+            const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+
+            if (mode === 'hue') {
+              const [h, s, l] = rgbToHsl(r, g, b);
+              const [nr, ng, nb] = hslToRgb(targetHue, s, l);
+              data[i] = nr;
+              data[i + 1] = ng;
+              data[i + 2] = nb;
+            } else if (mode === 'tint') {
+              data[i] = (r + targetHue[0]) / 2;
+              data[i + 1] = (g + targetHue[1]) / 2;
+              data[i + 2] = (b + targetHue[2]) / 2;
+            } else if (mode === 'gradient') {
+              const newRGB = applyGradientMap(r, g, b, targetHue, secondaryRGB);
+              data[i] = newRGB[0];
+              data[i + 1] = newRGB[1];
+              data[i + 2] = newRGB[2];
+            }
           }
 
           ctx.putImageData(imageData, 0, 0);
@@ -234,104 +269,6 @@
         };
       });
     }
-
-    async function isBlockItem(path, zip) {
-      const modelPath = path.replace("textures/item/", "models/item/").replace(".png", ".json");
-      try {
-        const modelFile = await zip.file(modelPath)?.async("string");
-        if (!modelFile) return false;
-        const model = JSON.parse(modelFile);
-        return model.parent?.includes("block") || false;
-      } catch {
-        return false;
-      }
-    }
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      const file = document.getElementById("packInput").files[0];
-      const hueHex = document.getElementById("huePicker").value;
-      const r = parseInt(hueHex.slice(1, 3), 16);
-      const g = parseInt(hueHex.slice(3, 5), 16);
-      const b = parseInt(hueHex.slice(5, 7), 16);
-      const [h] = rgbToHsl(r, g, b);
-
-      if (!file) return;
-
-      status.textContent = "Reading pack...";
-      previewGrid.innerHTML = "";
-      progressBar.value = 0;
-      downloadLink.style.display = "none";
-
-      const zip = await JSZip.loadAsync(file);
-      const newZip = new JSZip();
-      const texturePaths = [];
-
-      for (const relativePath in zip.files) {
-        const file = zip.files[relativePath];
-        const isTexture = relativePath.includes("textures/item/") && relativePath.endsWith(".png");
-        const isGui = relativePath.includes("textures/gui") || relativePath.includes("atlas") || relativePath.includes("container");
-        const isBlock = await isBlockItem(relativePath, zip);
-
-        if (isTexture) {
-          if (
-            (!includeBlocks.checked && isBlock) ||
-            (!includeItems.checked && !isBlock) ||
-            (!includeGui.checked && isGui)
-          ) {
-            continue;
-          }
-          texturePaths.push(relativePath);
-        } else if (!relativePath.endsWith(".png")) {
-          newZip.file(relativePath, file.async("arraybuffer"));
-        } else {
-          zip.file(relativePath).async("arraybuffer").then(data => {
-            newZip.file(relativePath, data);
-          });
-        }
-      }
-
-      let completed = 0;
-      for (const path of texturePaths) {
-        const imgData = await zip.file(path).async("blob");
-        const modifiedBlob = await shiftHue(imgData, h);
-
-        const imgURL = URL.createObjectURL(modifiedBlob);
-        const img = document.createElement("img");
-        img.src = imgURL;
-        img.alt = path.split("/").pop();
-        img.title = path;
-        img.classList.add("preview-image");
-
-        const wrapper = document.createElement("div");
-        wrapper.style.position = 'relative';
-        wrapper.appendChild(img);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.textContent = "✕";
-        removeBtn.className = "remove-toggle";
-        removeBtn.onclick = () => {
-          wrapper.remove();
-          texturePaths.splice(texturePaths.indexOf(path), 1);
-        };
-
-        wrapper.appendChild(removeBtn);
-        previewGrid.appendChild(wrapper);
-
-        newZip.file(path, modifiedBlob);
-
-        completed++;
-        progressBar.value = (completed / texturePaths.length) * 100;
-        status.textContent = `Processed ${completed} of ${texturePaths.length}`;
-        await new Promise(r => setTimeout(r, 20));
-      }
-
-      const resultBlob = await newZip.generateAsync({ type: "blob" });
-      downloadLink.href = URL.createObjectURL(resultBlob);
-      downloadLink.style.display = "block";
-      status.textContent = "Done! Ready to download.";
-    });
   </script>
 </body>
 </html>
