@@ -42,7 +42,8 @@ function updatePreview() {
     const brightness = parseInt(document.getElementById('brightness').value);
 
     // Update the preview with the current adjustments (just for visual feedback)
-    previewContainer.innerHTML = '';
+    const previewContainer = document.getElementById('texture-preview');
+    previewContainer.innerHTML = ''; // Clear existing preview
     textures.slice(0, batchSize).forEach((texture) => {
         const img = new Image();
         img.src = "data:image/png;base64," + texture.data;
@@ -107,7 +108,7 @@ function processTextures() {
             const newImage = new Image();
             newImage.src = canvas.toDataURL();
             newImage.classList.add("texture-item");
-            previewContainer.appendChild(newImage);
+            document.getElementById('texture-preview').appendChild(newImage);
         };
     }
 
