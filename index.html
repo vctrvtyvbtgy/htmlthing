@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Minecraft Texture Recolor</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 Minecraft Item Texture Modifier</h1>
+
+    <form id="textureForm">
+      <label for="packInput">Upload Resource Pack (.zip):</label>
+      <input type="file" id="packInput" accept=".zip" required />
+
+      <label for="huePicker">Choose Target Hue:</label>
+      <input type="color" id="huePicker" value="#ff00ff" />
+
+      <div class="options">
+        <label><input type="radio" name="mode" value="recolor" checked /> Recolor (Preserve Texture)</label>
+        <label><input type="radio" name="mode" value="replace" /> Replace (New Texture)</label>
+      </div>
+
+      <button type="submit">Process Pack</button>
+    </form>
+
+    <div id="status"></div>
+    <a id="downloadLink" style="display:none;" download="ModifiedPack.zip">Download Modified Pack</a>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
