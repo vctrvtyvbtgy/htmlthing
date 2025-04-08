@@ -172,15 +172,13 @@ document.getElementById("textureForm").addEventListener("submit", async (e) => {
   const packFile = document.getElementById("packInput").files[0];
   if (!packFile) return;
   
-  // Get color inputs and mode
+  // Get the primary color for hue shifting
   const primaryHex = document.getElementById("huePicker").value;
-  const secondaryHex = document.getElementById("secondaryColor").value;
-  const mode = document.getElementById("colorMode").value;
   
-  // For hue shift, extract hue from the primary color
+  // For hue shift, extract the hue from the primary color
   const [targetHue] = rgbToHsl(...hexToRgb(primaryHex));
   
-  // Load the ZIP file
+  // Load the resource pack ZIP
   const zip = await JSZip.loadAsync(packFile);
   const newZip = new JSZip();
   const filePaths = Object.keys(zip.files);
@@ -191,32 +189,32 @@ document.getElementById("textureForm").addEventListener("submit", async (e) => {
   for (const path of filePaths) {
     const file = zip.files[path];
     
-    // Exclude mobs: skip files if path indicates mob textures (commonly under "textures/entity/")
+    // Exclude mob textures (typically under "textures/entity/")
     if (path.includes("textures/entity/")) continue;
     
-    // Non-PNG files are added without modification
+    // Non-PNG files are copied unmodified
     if (!path.endsWith(".png")) {
       newZip.file(path, await file.async("arraybuffer"));
       continue;
     }
     
-    // Determine file type based on path
+    // Determine file type based on the path
     const isBlock = path.includes("textures/block/");
     const isItem = path.includes("textures/item/");
     const isGui = path.includes("textures/gui") || path.includes("atlas") || path.includes("container");
     
-    // If file is PNG and its category is deselected, skip it entirely
+    // If the file's category is deselected, skip it entirely
     if ((isBlock && !document.getElementById("includeBlocks").checked) ||
         (isItem && !document.getElementById("includeItems").checked) ||
         (isGui && !document.getElementById("includeGui").checked)) {
       continue;
     }
     
-    // Process the image file by recoloring it using the selected mode
+    // Process the image file by shifting its hue
     const blob = await file.async("blob");
-    const modifiedBlob = await shiftColor(blob, targetHue, primaryHex, secondaryHex, mode);
+    const modifiedBlob = await shiftHue(blob, targetHue);
     
-    // Add preview element with a removal button
+    // Add a preview with a removal button
     const imgURL = URL.createObjectURL(modifiedBlob);
     const wrapper = document.createElement("div");
     wrapper.style.position = "relative";
@@ -245,14 +243,13 @@ document.getElementById("textureForm").addEventListener("submit", async (e) => {
     document.getElementById("status").textContent = `Processed ${processedCount} of ${filePaths.length}`;
   }
   
-  // Generate the new zip and provide the download link
+  // Generate the final ZIP and update the download link
   const resultBlob = await newZip.generateAsync({ type: "blob" });
   const downloadLink = document.getElementById("downloadLink");
   downloadLink.href = URL.createObjectURL(resultBlob);
   downloadLink.style.display = "block";
   document.getElementById("status").textContent = "Done! Ready to download.";
 });
-
 
 // --- Helper Functions ---
 
@@ -287,7 +284,7 @@ function hslToRgb(h, s, l) {
   h /= 360;
   let r, g, b;
   if (s === 0) {
-    r = g = b = l; // achromatic
+    r = g = b = l;
   } else {
     const hue2rgb = (p, q, t) => {
       if (t < 0) t += 1;
@@ -306,11 +303,9 @@ function hslToRgb(h, s, l) {
   return [r * 255, g * 255, b * 255];
 }
 
-// Recolor the image in the given blob based on the selected mode:
-// "hue" mode: shift hue to targetHue (from primary color)
-// "tint" mode: average the pixel color with the primary color
-// "gradient" mode: interpolate between primary and secondary based on brightness
-async function shiftColor(blob, targetHue, primaryHex, secondaryHex, mode) {
+// Shifts the hue of the image contained in the blob to the targetHue.
+// This function performs the only operation (hue shift) so that only the textures change.
+async function shiftHue(blob, targetHue) {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = URL.createObjectURL(blob);
@@ -322,31 +317,17 @@ async function shiftColor(blob, targetHue, primaryHex, secondaryHex, mode) {
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
-      const primaryRGB = hexToRgb(primaryHex);
-      const secondaryRGB = hexToRgb(secondaryHex);
       
       for (let i = 0; i < data.length; i += 4) {
         // Skip nearly transparent pixels
         if (data[i + 3] < 10) continue;
         const r = data[i], g = data[i + 1], b = data[i + 2];
-        
-        if (mode === "hue") {
-          const [h, s, l] = rgbToHsl(r, g, b);
-          const [nr, ng, nb] = hslToRgb(targetHue, s, l);
-          data[i] = nr;
-          data[i + 1] = ng;
-          data[i + 2] = nb;
-        } else if (mode === "tint") {
-          data[i] = (r + primaryRGB[0]) / 2;
-          data[i + 1] = (g + primaryRGB[1]) / 2;
-          data[i + 2] = (b + primaryRGB[2]) / 2;
-        } else if (mode === "gradient") {
-          // Calculate brightness as a value between 0 and 1
-          const brightness = (r + g + b) / (3 * 255);
-          data[i] = primaryRGB[0] * (1 - brightness) + secondaryRGB[0] * brightness;
-          data[i + 1] = primaryRGB[1] * (1 - brightness) + secondaryRGB[1] * brightness;
-          data[i + 2] = primaryRGB[2] * (1 - brightness) + secondaryRGB[2] * brightness;
-        }
+        // Convert pixel to HSL, replace its hue with targetHue, then convert back to RGB
+        const [h, s, l] = rgbToHsl(r, g, b);
+        const [nr, ng, nb] = hslToRgb(targetHue, s, l);
+        data[i] = nr;
+        data[i + 1] = ng;
+        data[i + 2] = nb;
       }
       
       ctx.putImageData(imageData, 0, 0);
