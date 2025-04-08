@@ -115,9 +115,9 @@
       border: 1px solid #e50914;
       border-radius: 50%;
       font-size: 0.8rem;
-      padding: 1px 5px;
+      padding: 1px 6px;
       cursor: pointer;
-      transition: background 0.2s ease;
+      transition: all 0.2s ease;
     }
 
     .remove-toggle:hover {
@@ -166,109 +166,208 @@
   </div>
 
   <script>
-    function lerp(a, b, t) {
-      return a + (b - a) * t;
+    const includeBlocks = () => document.getElementById('includeBlocks').checked;
+    const includeItems = () => document.getElementById('includeItems').checked;
+    const includeGui = () => document.getElementById('includeGui').checked;
+    document.getElementById("textureForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const packFile = document.getElementById("packInput").files[0];
+  if (!packFile) return;
+  
+  // Get color inputs and mode
+  const primaryHex = document.getElementById("huePicker").value;
+  const secondaryHex = document.getElementById("secondaryColor").value;
+  const mode = document.getElementById("colorMode").value;
+  
+  // Convert primary color to a value usable by our algorithm.
+  // For hue mode we extract the hue from the primary color.
+  const [targetHue] = rgbToHsl(...hexToRgb(primaryHex));
+  
+  // Load the zip file
+  const zip = await JSZip.loadAsync(packFile);
+  const newZip = new JSZip();
+  
+  // Helper functions to determine file type
+  function isBlockTexture(path) {
+    // Assuming block textures are stored in "textures/block/"
+    return path.includes("textures/block/");
+  }
+  
+  function isItemTexture(path) {
+    // Assuming item textures are stored in "textures/item/"
+    return path.includes("textures/item/");
+  }
+  
+  function isGuiTexture(path) {
+    // Check for common GUI texture paths
+    return path.includes("textures/gui") || path.includes("atlas") || path.includes("container");
+  }
+  
+  // Iterate over each file in the pack
+  const filePaths = Object.keys(zip.files);
+  const previewGrid = document.getElementById("previewGrid");
+  previewGrid.innerHTML = "";
+  let processedCount = 0;
+  
+  for (const path of filePaths) {
+    const file = zip.files[path];
+    // Copy non-PNG files as-is
+    if (!path.endsWith(".png")) {
+      newZip.file(path, await file.async("arraybuffer"));
+      continue;
     }
+    
+    // Determine file type and check against UI selections
+    const isBlock = isBlockTexture(path);
+    const isItem = isItemTexture(path);
+    const isGui = isGuiTexture(path);
+    
+    // If file is PNG but should not be processed per the checkboxes, simply copy it.
+    if ((isBlock && !document.getElementById("includeBlocks").checked) ||
+        (isItem && !document.getElementById("includeItems").checked) ||
+        (isGui && !document.getElementById("includeGui").checked)) {
+      newZip.file(path, await file.async("arraybuffer"));
+      continue;
+    }
+    
+    // Process the image file by recoloring it using our algorithm.
+    const blob = await file.async("blob");
+    const modifiedBlob = await shiftColor(blob, targetHue, primaryHex, secondaryHex, mode);
+    
+    // Add preview element
+    const imgURL = URL.createObjectURL(modifiedBlob);
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    const img = document.createElement("img");
+    img.src = imgURL;
+    img.alt = path.split("/").pop();
+    img.title = path;
+    img.className = "preview-image";
+    wrapper.appendChild(img);
+    
+    // Add removal button
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "✕";
+    removeBtn.className = "remove-toggle";
+    removeBtn.onclick = () => {
+      wrapper.remove();
+      // Remove from newZip as well – here we simply mark it removed
+      newZip.remove(path);
+    };
+    wrapper.appendChild(removeBtn);
+    previewGrid.appendChild(wrapper);
+    
+    // Add the modified file to the new zip
+    newZip.file(path, modifiedBlob);
+    processedCount++;
+    document.getElementById("status").textContent = `Processed ${processedCount} of ${filePaths.length}`;
+  }
+  
+  // Generate new zip and provide download link
+  const resultBlob = await newZip.generateAsync({ type: "blob" });
+  const downloadLink = document.getElementById("downloadLink");
+  downloadLink.href = URL.createObjectURL(resultBlob);
+  downloadLink.style.display = "block";
+  document.getElementById("status").textContent = "Done! Ready to download.";
+});
 
-    function rgbToHsl(r, g, b) {
-      r /= 255; g /= 255; b /= 255;
-      const max = Math.max(r, g, b), min = Math.min(r, g, b);
-      let h, s, l = (max + min) / 2;
+// --- Recoloring functions ---
 
-      if (max === min) {
-        h = s = 0;
-      } else {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-          case g: h = (b - r) / d + 2; break;
-          case b: h = (r - g) / d + 4; break;
+// Converts a hex color string to an [r, g, b] array.
+function hexToRgb(hex) {
+  const bigint = parseInt(hex.slice(1), 16);
+  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+}
+
+// Converts RGB to HSL and returns [h, s, l]
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) {
+    h = s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch(max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+
+// Converts HSL to RGB and returns [r, g, b]
+function hslToRgb(h, s, l) {
+  h /= 360;
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  return [r * 255, g * 255, b * 255];
+}
+
+// Recoloring function that applies the selected mode
+async function shiftColor(blob, targetHue, primaryHex, secondaryHex, mode) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const primaryRGB = hexToRgb(primaryHex);
+      const secondaryRGB = hexToRgb(secondaryHex);
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const alpha = data[i + 3];
+        if (alpha < 10) continue;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        if (mode === "hue") {
+          // Convert to HSL, then replace hue with targetHue
+          const [h, s, l] = rgbToHsl(r, g, b);
+          const [nr, ng, nb] = hslToRgb(targetHue, s, l);
+          data[i] = nr; data[i + 1] = ng; data[i + 2] = nb;
+        } else if (mode === "tint") {
+          // Average the original color with the primary color
+          data[i] = (r + primaryRGB[0]) / 2;
+          data[i + 1] = (g + primaryRGB[1]) / 2;
+          data[i + 2] = (b + primaryRGB[2]) / 2;
+        } else if (mode === "gradient") {
+          // Use brightness to interpolate between primary and secondary colors
+          const brightness = (r + g + b) / (3 * 255);
+          data[i] = primaryRGB[0] * (1 - brightness) + secondaryRGB[0] * brightness;
+          data[i + 1] = primaryRGB[1] * (1 - brightness) + secondaryRGB[1] * brightness;
+          data[i + 2] = primaryRGB[2] * (1 - brightness) + secondaryRGB[2] * brightness;
         }
-        h /= 6;
       }
-      return [h * 360, s, l];
-    }
+      ctx.putImageData(imageData, 0, 0);
+      canvas.toBlob(resolve, "image/png");
+    };
+  });
+}
 
-    function hslToRgb(h, s, l) {
-      h /= 360;
-      let r, g, b;
-      if (s === 0) {
-        r = g = b = l;
-      } else {
-        const hue2rgb = (p, q, t) => {
-          if (t < 0) t += 1;
-          if (t > 1) t -= 1;
-          if (t < 1 / 6) return p + (q - p) * 6 * t;
-          if (t < 1 / 2) return q;
-          if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-          return p;
-        };
-        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-        const p = 2 * l - q;
-        r = hue2rgb(p, q, h + 1 / 3);
-        g = hue2rgb(p, q, h);
-        b = hue2rgb(p, q, h - 1 / 3);
-      }
-      return [r * 255, g * 255, b * 255];
-    }
-
-    function hexToRgb(hex) {
-      const bigint = parseInt(hex.slice(1), 16);
-      return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
-    }
-
-    function applyGradientMap(r, g, b, startRGB, endRGB) {
-      const brightness = (r + g + b) / (3 * 255);
-      return [
-        lerp(startRGB[0], endRGB[0], brightness),
-        lerp(startRGB[1], endRGB[1], brightness),
-        lerp(startRGB[2], endRGB[2], brightness)
-      ];
-    }
-
-    async function shiftHue(blob, targetHue, mode, secondaryHex) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(blob);
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          const secondaryRGB = hexToRgb(secondaryHex);
-
-          for (let i = 0; i < data.length; i += 4) {
-            const alpha = data[i + 3];
-            if (alpha < 10) continue;
-            const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
-
-            if (mode === 'hue') {
-              const [h, s, l] = rgbToHsl(r, g, b);
-              const [nr, ng, nb] = hslToRgb(targetHue, s, l);
-              data[i] = nr;
-              data[i + 1] = ng;
-              data[i + 2] = nb;
-            } else if (mode === 'tint') {
-              data[i] = (r + targetHue[0]) / 2;
-              data[i + 1] = (g + targetHue[1]) / 2;
-              data[i + 2] = (b + targetHue[2]) / 2;
-            } else if (mode === 'gradient') {
-              const newRGB = applyGradientMap(r, g, b, targetHue, secondaryRGB);
-              data[i] = newRGB[0];
-              data[i + 1] = newRGB[1];
-              data[i + 2] = newRGB[2];
-            }
-          }
-
-          ctx.putImageData(imageData, 0, 0);
-          canvas.toBlob(resolve, 'image/png');
-        };
-      });
-    }
   </script>
 </body>
 </html>
