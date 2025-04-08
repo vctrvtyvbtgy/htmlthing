@@ -191,6 +191,9 @@ document.getElementById("textureForm").addEventListener("submit", async (e) => {
   for (const path of filePaths) {
     const file = zip.files[path];
     
+    // Exclude mobs: skip files if path indicates mob textures (commonly under "textures/entity/")
+    if (path.includes("textures/entity/")) continue;
+    
     // Non-PNG files are added without modification
     if (!path.endsWith(".png")) {
       newZip.file(path, await file.async("arraybuffer"));
@@ -351,7 +354,6 @@ async function shiftColor(blob, targetHue, primaryHex, secondaryHex, mode) {
     };
   });
 }
-
 
   </script>
 </body>
